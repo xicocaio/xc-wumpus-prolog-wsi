@@ -1,18 +1,20 @@
 :- abolish(hunter/3).
 :- abolish(wumpus/1).
 :- abolish(pit/1).
-:- abolish(gold/1).
+:- abolish(gini/1).
 :- abolish(visited/1).
+:- abolish(breeze/1).
 
 :- dynamic([
   hunter/3,
   wumpus/1,
   pit/1,
-  gold/1,
+  gini/1,
   grab/1,
   actions/1,
   shooted/1,
-  visited/1
+  visited/1,
+  breeze/1
 ]).
 
 % ---------------------------- %
@@ -30,32 +32,70 @@
 %     +---+---+---+---+
 %       1   2   3   4
 % Test world
-world(4,4).
-gold([2, 3]).
-wumpus([1, 3]).
-pit([3, 1]).
-pit([3, 3]).
-pit([4, 4]).
 
-%% positiion, direction, time
-%% hunter([1,1], right, 1).
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%	World Setup
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+world(4,4).
+gini([2, 3]).
+wumpus([1, 3]).
+pit([3, 1]). %% breeze [2,1], [4,1], [3,2]
+pit([3, 3]). %% breeze [3,4], [3,2], [2,3], [4,3]
+pit([4, 4]). %% breeze [4,3], [3,4]
+
+
+find_breezes(L) :- 
+	setof(
+		[X_next,Y_next],
+		X^Y^(pit([X,Y]),
+		neighbor([X,Y],[X_next,Y_next])),
+		L).
+
+setup_breeze([]).
+setup_breeze([[X,Y]|T]) :- assertz(breeze([X,Y])), setup_breeze(T).
+
+setup_breezes :-
+	find_breezes(N),
+	setup_breeze(N).
+
+find_stenches(L) :- 
+	setof(
+		[X_next,Y_next],
+		X^Y^(pit([X,Y]),
+		neighbor([X,Y],[X_next,Y_next])),
+		L).
+
+setup_stench([]).
+setup_stench([[X,Y]|T]) :- assertz(stench([X,Y])), setup_stench(T).
+
+setup_stenches :-
+	find_stenches(N),
+	setup_stench(N).
+
 
 in_limits([X,Y]) :- world(Width, Height), X > 0, X =< Width, Y > 0, Y =< Height.
 
 %%% this should go on a utils
-up([X,Y], [X,Y_Next]) :- Y_Next is Y + 1, in_limits([X, Y_Next]).
-down([X,Y], [X,Y_Next]) :- Y_Next is Y - 1, in_limits([X, Y_Next]).
-right([X,Y], [X_Next,Y]) :- X_Next is X + 1, in_limits([X_Next, Y]).
-left([X,Y], [X_Next,Y]) :- X_Next is X - 1, in_limits([X_Next, Y]).
+up_cell([X,Y], [X,Y_next]) :- Y_next is Y + 1, in_limits([X, Y_next]).
+down_cell([X,Y], [X,Y_next]) :- Y_next is Y - 1, in_limits([X, Y_next]).
+right_cell([X,Y], [X_next,Y]) :- X_next is X + 1, in_limits([X_next, Y]).
+left_cell([X,Y], [X_next,Y]) :- X_next is X - 1, in_limits([X_next, Y]).
 
-neighbor([X,Y],[X_Next,Y_Next]) :- up([X,Y],[X_Next,Y_Next]); down([X,Y],[X_Next,Y_Next]); right([X,Y],[X_Next,Y_Next]); left([X,Y],[X_Next,Y_Next]).
+neighbor([X,Y],[X_next,Y_next]) :-
+	up_cell([X,Y],[X_next,Y_next]);
+	down_cell([X,Y],[X_next,Y_next]);
+	right_cell([X,Y],[X_next,Y_next]);
+	left_cell([X,Y],[X_next,Y_next]).
 
-neighbors([X,Y],N) :- findall([X_Next,Y_Next], neighbor([X,Y],[X_Next,Y_Next]), N).
+neighbors([X,Y],N) :- findall([X_next,Y_next], neighbor([X,Y],[X_next,Y_next]), N).
 
-%%% this line below should be asserted to KB on the board generation
-breeze([X,Y]) :- pit([X_Next,Y_Next]), neighbor([X,Y],[X_Next,Y_Next]).
-stench([X,Y]) :- wumpus([X_Next,Y_Next]), neighbor([X,Y],[X_Next,Y_Next]).
 
+%% nw(x,y) :- (visi(d),nfed(d)) ; (vis(e),nfed(e))
+ %% w(d) ;- breza(c),nw(d),nw(e),nw(u)
+
+
+%% stench([X,Y]) :- wumpus([X_next,Y_next]), neighbor([X,Y],[X_next,Y_next]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%	Code for agent
@@ -63,61 +103,87 @@ stench([X,Y]) :- wumpus([X_Next,Y_Next]), neighbor([X,Y],[X_Next,Y_Next]).
 %%%%%%%%%%%%%%%%%%%%%%%%	continue here and try to get list of neighbors on the terminal
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% percept, used by agent
-forward(X) :- X.
+action(A) :- A = forward ; A = turnright; A = turnleft.
 
-visited([1,1]).
-hunter([1,1], right, 1).
-hunter([X,Y], D, T) :-
-	X_Bef is X - 1,
-	Y_Bef is Y,
-	T_Bef is T - 1,
-	in_limits([X_Bef, Y_Bef]),
-	hunter([X_Bef, Y_Bef], D_Bef, T_Bef),
-	forward(true).
+%% Agent movement
+%% action(instruction, initial coordinates, initial direction, resulting position, resulting direction)
+action(forward, [X_ini,Y_ini], up, [X,Y], up) :- up_cell([X_ini,Y_ini],[X,Y]).
+action(forward, [X_ini,Y_ini], down, [X,Y], down) :- down_cell([X_ini,Y_ini],[X,Y]).
+action(forward, [X_ini,Y_ini], right, [X,Y], right) :- right_cell([X_ini,Y_ini],[X,Y]).
+action(forward, [X_ini,Y_ini], left, [X,Y], left) :- left_cell([X_ini,Y_ini],[X,Y]).
 
-dosomething([]).
-dosomething([H|T]) :- has_pit(H), dosomething(T).
+action(turnright, [X,Y], up, [X,Y], right).
+action(turnright, [X,Y], right, [X,Y], down).
+action(turnright, [X,Y], down, [X,Y], left).
+action(turnright, [X,Y], left, [X,Y], up).
+
+action(turnleft, [X,Y], up, [X,Y], left).
+action(turnleft, [X,Y], left, [X,Y], down).
+action(turnleft, [X,Y], down, [X,Y], right).
+action(turnleft, [X,Y], right, [X,Y], up).
+
+%% hunter([1,1], right, 0, _).
+
+%% hunter([X,Y], D, T, A) :-
+%% 	T >= 0, T_ini is T - 1,
+%% 	hunter([X_ini,Y_ini], D_ini, T_ini, _),
+%% 	action(A, [X_ini,Y_ini], D_ini, [X,Y], D).
+
+%% hunter([X,Y], D) :-
+%% 	hunter([X_ini,Y_ini], D_ini, _),
+%% 	action(A, [X_ini,Y_ini], D_ini, [X,Y], D).
+
+visited([[1,1]]).
+hunter([1,1], right).
+
+run :- hunter([X,Y], D), run_scenario(0, [X,Y], D).
+
+run_scenario(200, [_,_], _) :- write('!: Reached max allowed moves.'), nl, halt.
+run_scenario(T, [X,Y], D) :- 
+	action(A, [X,Y], D, [X_next,Y_next], D_next),
+	format('~d: At ~dx~d facing ~p, action ~p.~n', [T, X, Y, D, A]),
+	%% append([X,Y], visited, visited),
+	Tick is T + 1,
+	run_scenario(Tick, [X_next, Y_next], D_next).
+
+%% neighbors([X,Y], N)
+%% no_pit([X,Y]) :- visited, neighbors([X,Y], N), not(breeze()).
+
+%% maybe_pits([X,Y], P) :- 
+%% 	findall(
+%% 		[X_next,Y_next],
+%% 		(breeze([X,Y]),
+%% 		neighbor([X,Y],[X_next,Y_next]),
+%% 		not(visited([[X_next,Y_next]]))),
+%% 		P).
+
+%% iterate_list([]).
+%% iterate_list([H|T]) :- breeze(H), iterate_list(T).
+
+%% sense_stench([X,Y]) :-
+%% 	neighbors([X,Y],N),
+%% 	N .
+
+%% sensors([X,Y], [Stench, Breeze, Glitter, Bump, Scream]) :-
+%% 	Stench is sense_stench([X,Y]),
+%% 	Breeze is sense_breeze([X,Y]),
+%% 	Glitter is sense_glitter([X,Y]),
+%% 	Bump is no,
+%% 	Scream is no.
 
 sense_breeze([X,Y]) :- breeze([X,Y]).
 sense_stench([X,Y]) :- stench([X,Y]).
 
 
-nearby_pit_possibilities([X,Y],N) :- findall([X_Next,Y_Next], (neighbor([X,Y],[X_Next,Y_Next]), breeze([X,Y])), N).
+nearby_pit_possibilities([X,Y],N) :- findall([X_next,Y_next], (neighbor([X,Y],[X_next,Y_next]), breeze([X,Y])), N).
 
 %% maybe_pit([]).
 %% maybe_pit([H|T]) :- breeze(H), maybe_pit(T).
 
 
-
-% how to use a list of outputs as input in a predicate
-
-
-% finds all locations that possibly has pit, looking from position 2,1
-list1(N) :- findall([P,Q], maybe_pit(P,Q,2,1), N).
-
-% finds all locations that possibly has pit, looking from position 1,2
-list2(N) :- findall([P,Q], maybe_pit(P,Q,1,2), N).
-
-%% explored_locations(L) :- [[1,1],[2,1],[1,2]].
-
-%% maybe_pit_list :- 
-
-
-test_pit(P,Q) :- maybe_pit(P,Q,list1(N)), maybe_pit(P,Q,list2(N)).
-
-
 %% checkBreezeList([],_).
 %% checkBreezeList([H|T],S) :- checkBreezeList(T,S), breeze(H,S).
 
-
-%%% (X,Y,T), start location is at position (1,1) at time = 1
-start_location(1,1,1).
-looking_right(D) :- D = right.
-
-location(X_Next,Y_Next,T_Next) :- start_location(X,Y,T), T_Next is T + 1, X_Next is X + 1, Y_Next is Y, looking_right(right), forward(true).
-
-
-%%% findall(Y, pit(3,Y), List).
 
 %%% axioms page 284
 
@@ -135,4 +201,4 @@ location(X_Next,Y_Next,T_Next) :- start_location(X,Y,T), T_Next is T + 1, X_Next
 %   1 | H |   |   |   |
 %     +---+---+---+---+
 %       1   2   3   4
-% gold(4, 4).
+% gini(4, 4).
