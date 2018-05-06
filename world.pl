@@ -152,30 +152,35 @@ run_scenario(T, [X,Y], D) :-
 
 hunter_alive(true).
 
-visited([[1,1], [1,2]]).
+visited([[1,1], [2,1], [1,2]]).
 
-%% there is no pit in [X,Y] if the position [X,Y] was visited
+%% no pit in [X,Y] if it is a visited position
 kb_no_pit([X,Y]) :-
 	visited(L),
 	member([X,Y], L).
 
-%% there is no pit in neighbors of [X,Y] if had no breeze when visited
+%% no pit on [X,Y] if it is a visited no breeze neighbor
 kb_no_pit([X,Y]) :-
-	neighbor([X,Y],[X_next,Y_next]),
 	visited(L),
-	member([X_next,Y_next], L),
-	not(breeze([X_next, Y_next])).
+	member([VX,VY], L),
+	not(breeze([VX, VY])),
+	neighbor([VX,VY], [X,Y]).
 
-%% maybe_pits([X,Y], P) :- 
-%% 	findall(
-%% 		[X_next,Y_next],
-%% 		(breeze([X,Y]),
-%% 		neighbor([X,Y],[X_next,Y_next]),
-%% 		not(visited([[X_next,Y_next]]))),
-%% 		P).
 
-%% iterate_list([]).
-%% iterate_list([H|T]) :- breeze(H), iterate_list(T).
+not_possible_pits([]).
+not_possible_pits([[X,Y]|T]) :- kb_no_pit([X,Y]), not_possible_pits(T).
+
+%% pit on [X,Y] if there is a visited breeze neighbor which
+%% all other neighbors, except [X,Y], don't have pits
+kb_pit([X,Y]) :- 
+	visited(L),
+	member([VBX,VBY], L),
+	breeze([VBX, VBY]),
+	neighbor([VBX,VBY], [X,Y]),
+	not(kb_no_pit([X,Y])),
+	neighbors([VBX,VBY], N),
+	subtract(N, [[X,Y]], NS),
+	not_possible_pits(NS).
 
 %% sense_stench([X,Y]) :-
 %% 	neighbors([X,Y],N),
@@ -187,19 +192,6 @@ kb_no_pit([X,Y]) :-
 %% 	Glitter is sense_glitter([X,Y]),
 %% 	Bump is no,
 %% 	Scream is no.
-
-sense_breeze([X,Y]) :- breeze([X,Y]).
-sense_stench([X,Y]) :- stench([X,Y]).
-
-
-nearby_pit_possibilities([X,Y],N) :- findall([X_next,Y_next], (neighbor([X,Y],[X_next,Y_next]), breeze([X,Y])), N).
-
-%% maybe_pit([]).
-%% maybe_pit([H|T]) :- breeze(H), maybe_pit(T).
-
-
-%% checkBreezeList([],_).
-%% checkBreezeList([H|T],S) :- checkBreezeList(T,S), breeze(H,S).
 
 
 %%% axioms page 284
