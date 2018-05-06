@@ -133,7 +133,6 @@ action(turnleft, [X,Y], right, [X,Y], up).
 %% 	hunter([X_ini,Y_ini], D_ini, _),
 %% 	action(A, [X_ini,Y_ini], D_ini, [X,Y], D).
 
-visited([[1,1]]).
 hunter([1,1], right).
 
 run :- hunter([X,Y], D), run_scenario(0, [X,Y], D).
@@ -146,8 +145,26 @@ run_scenario(T, [X,Y], D) :-
 	Tick is T + 1,
 	run_scenario(Tick, [X_next, Y_next], D_next).
 
-%% neighbors([X,Y], N)
-%% no_pit([X,Y]) :- visited, neighbors([X,Y], N), not(breeze()).
+%% visited([[H]|T]) :- visited([H]), visited(T).
+
+%% sense_breeze([]).
+%% sense_breeze([[H]|T]) :- breeze([H]).
+
+hunter_alive(true).
+
+visited([[1,1], [1,2]]).
+
+%% there is no pit in [X,Y] if the position [X,Y] was visited
+kb_no_pit([X,Y]) :-
+	visited(L),
+	member([X,Y], L).
+
+%% there is no pit in neighbors of [X,Y] if had no breeze when visited
+kb_no_pit([X,Y]) :-
+	neighbor([X,Y],[X_next,Y_next]),
+	visited(L),
+	member([X_next,Y_next], L),
+	not(breeze([X_next, Y_next])).
 
 %% maybe_pits([X,Y], P) :- 
 %% 	findall(
