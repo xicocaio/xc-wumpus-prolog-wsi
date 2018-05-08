@@ -146,23 +146,23 @@ kb_no_wumpus([X,Y]) :-
 	visited_list(L),
 	member([X,Y], L).
 
-%% no wumpus on [X,Y] if it is a visited no breeze neighbor
+%% no wumpus on [X,Y] if it is a visited no stench neighbor
 kb_no_wumpus([X,Y]) :-
 	visited_list(L),
 	member([VX,VY], L),
-	not(breeze([VX, VY])),
+	not(stench([VX, VY])),
 	neighbor([VX,VY], [X,Y]).
 
 
 no_possible_wumpus([]).
 no_possible_wumpus([[X,Y]|T]) :- kb_no_wumpus([X,Y]), no_possible_wumpus(T).
 
-%% wumpus on [X,Y] if there is a visited breeze neighbor which
+%% wumpus on [X,Y] if there is a visited stench neighbor which
 %% all other neighbors, except [X,Y], don't have wumpus
 kb_wumpus([X,Y]) :- 
 	visited_list(L),
 	member([VBX,VBY], L),
-	breeze([VBX, VBY]),
+	stench([VBX, VBY]),
 	neighbor([VBX,VBY], [X,Y]),
 	not(kb_no_wumpus([X,Y])),
 	neighbors([VBX,VBY], N),
